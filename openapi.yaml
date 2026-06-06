@@ -1,0 +1,442 @@
+openapi: 3.1.0
+info:
+  title: KFIRE Server API
+  description: |
+    REST control plane for KFIRE — self-hosted gaming presence for organizations.
+
+    Authentication uses short-lived JWT access tokens (15 min) plus device-bound
+    refresh tokens. Real-time presence is delivered over WebSocket — see
+    `websocket-events.md` in this repository.
+  version: 0.1.0
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+
+servers:
+  - url: https://{host}/api/v1
+    variables:
+      host:
+        default: kfire.example.org
+        description: Self-hosted instance hostname
+
+tags:
+  - name: auth
+    description: Registration, login, token lifecycle
+  - name: users
+    description: User profile
+  - name: presence
+    description: Live "who is playing what" snapshot
+  - name: sessions
+    description: Game session history
+
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      summary: Register a new member account
+      description: Requires a valid invite on instances where open registration is disabled.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 32
+                  pattern: '^[a-zA-Z0-9_.-]+$'
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 12
+                  maxLength: 128
+                invite_code:
+                  type: string
+                  description: Required when open registration is disabled
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '409':
+          description: Username or email already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Authenticate and obtain a token pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, device]
+              properties:
+                username:
+                  type: string
+                  description: Username or email
+                password:
+                  type: string
+                device:
+                  $ref: '#/components/schemas/DeviceInfo'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshToken
+      summary: Exchange a refresh token for a new token pair
+      description: |
+        Refresh tokens are single-use and bound to the device that obtained them.
+        A successful refresh rotates the refresh token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token, device_id]
+              properties:
+                refresh_token:
+                  type: string
+                device_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+        '401':
+          description: Refresh token invalid, expired, or device mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke the current device's refresh token
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/me:
+    get:
+      tags: [users]
+      operationId: getCurrentUser
+      summary: Get the authenticated user's profile
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /presence:
+    get:
+      tags: [presence]
+      operationId: getPresenceSnapshot
+      summary: Snapshot of members currently online / in game
+      description: |
+        Returns the current presence state for every member. For live updates,
+        subscribe to the WebSocket instead — this endpoint is intended for
+        initial page load and non-realtime consumers.
+      responses:
+        '200':
+          description: Current presence state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PresenceEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sessions:
+    get:
+      tags: [sessions]
+      operationId: listSessions
+      summary: Paginated game session history
+      parameters:
+        - name: user_id
+          in: query
+          description: Filter by member
+          schema:
+            type: string
+            format: uuid
+        - name: game_id
+          in: query
+          description: Filter by game
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          description: Only sessions started at or after this instant
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only sessions started before this instant
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: cursor
+          in: query
+          description: Opaque pagination cursor from a previous response
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GameSession'
+                  next_cursor:
+                    type: string
+                    description: Pass as `cursor` to fetch the next page; absent on the last page
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 15-minute access token issued by /auth/login or /auth/refresh
+
+  responses:
+    Unauthorized:
+      description: Missing, expired, or invalid access token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests — retry after the indicated delay
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code (e.g. `invalid_credentials`)
+        message:
+          type: string
+          description: Human-readable explanation
+
+    DeviceInfo:
+      type: object
+      description: Identifies the device a refresh token is bound to
+      required: [device_id, name, platform]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+          description: Stable identifier generated and stored by the client
+        name:
+          type: string
+          maxLength: 64
+          examples: ["Gaming PC"]
+        platform:
+          type: string
+          enum: [windows, macos, linux, web]
+
+    AuthTokens:
+      type: object
+      required: [access_token, refresh_token, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: JWT, valid for 15 minutes
+        refresh_token:
+          type: string
+          description: Opaque single-use token bound to the device
+        expires_in:
+          type: integer
+          description: Access token lifetime in seconds
+          examples: [900]
+
+    User:
+      type: object
+      required: [id, username, role, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+          description: Only present on the owner's own profile
+        role:
+          type: string
+          enum: [admin, member]
+        avatar_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+
+    Game:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          examples: ["Counter-Strike 2"]
+        slug:
+          type: string
+          examples: ["counter-strike-2"]
+        icon_url:
+          type: string
+          format: uri
+
+    PresenceStatus:
+      type: string
+      enum: [offline, online, in_game]
+
+    PresenceEntry:
+      type: object
+      required: [user_id, username, status]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        status:
+          $ref: '#/components/schemas/PresenceStatus'
+        game:
+          oneOf:
+            - $ref: '#/components/schemas/Game'
+            - type: 'null'
+          description: Set when status is `in_game`
+        since:
+          type: string
+          format: date-time
+          description: When the current status began
+
+    GameSession:
+      type: object
+      required: [id, user_id, game, source, started_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        game:
+          $ref: '#/components/schemas/Game'
+        source:
+          type: string
+          enum: [client, steam_api, xbox_api, psn_api]
+          description: How this session was detected
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+          description: Null while the session is still active
+        duration_seconds:
+          oneOf:
+            - type: integer
+            - type: 'null'
+          description: Computed once the session ends
+
+security:
+  - bearerAuth: []
