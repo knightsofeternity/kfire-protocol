@@ -24,10 +24,14 @@ tags:
     description: Registration, login, token lifecycle
   - name: users
     description: User profile
+  - name: games
+    description: Games catalog (seeded from Discord's detectable applications list)
   - name: presence
     description: Live "who is playing what" snapshot
   - name: sessions
     description: Game session history
+  - name: admin
+    description: Instance administration (admin role required)
 
 paths:
   /auth/register:
@@ -178,6 +182,68 @@ paths:
                 $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /games:
+    get:
+      tags: [games]
+      operationId: listGames
+      summary: Full games catalog
+      description: |
+        Returns every game the server can attribute presence to. The desktop
+        client downloads this list, caches it locally, and matches running
+        process names against `executable_names`.
+      responses:
+        '200':
+          description: Games catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [games]
+                properties:
+                  games:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GameDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/games/sync:
+    post:
+      tags: [admin]
+      operationId: syncGames
+      summary: Re-import the games catalog from Discord
+      description: |
+        Downloads Discord's public detectable-applications list and upserts the
+        catalog (games keep their slug across syncs). Admin role required.
+        The server also runs this automatically on first boot when the catalog
+        is empty.
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [upserted]
+                properties:
+                  upserted:
+                    type: integer
+                    description: Number of games inserted or updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Discord catalog unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /presence:
     get:
@@ -381,6 +447,23 @@ components:
         icon_url:
           type: string
           format: uri
+
+    GameDetail:
+      description: Catalog entry with the data needed for local process matching
+      allOf:
+        - $ref: '#/components/schemas/Game'
+        - type: object
+          required: [executable_names, platform]
+          properties:
+            executable_names:
+              type: array
+              items:
+                type: string
+              description: Lowercased process basenames to match (launchers excluded)
+              examples: [["cs2.exe", "cs2"]]
+            platform:
+              type: string
+              enum: [pc, xbox, playstation]
 
     PresenceStatus:
       type: string
