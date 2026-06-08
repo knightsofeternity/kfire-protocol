@@ -32,6 +32,8 @@ tags:
     description: Game session history
   - name: admin
     description: Instance administration (admin role required)
+  - name: connectors
+    description: External platform account linking (Steam, …)
 
 paths:
   /auth/register:
@@ -299,6 +301,72 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /connect/steam:
+    get:
+      tags: [connectors]
+      operationId: startSteamLink
+      summary: Begin linking a Steam account
+      description: |
+        Returns the "Sign in through Steam" OpenID URL. The web client navigates
+        the browser to it; Steam redirects back to the callback. Returns 501 when
+        the connector is not configured on the instance.
+      responses:
+        '200':
+          description: Redirect URL to Steam
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '501':
+          description: Steam connector not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [connectors]
+      operationId: unlinkSteam
+      summary: Unlink the Steam account
+      responses:
+        '204':
+          description: Unlinked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No Steam account linked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /connect/steam/callback:
+    get:
+      tags: [connectors]
+      operationId: steamCallback
+      summary: Steam OpenID return endpoint (browser redirect)
+      description: |
+        Steam redirects the browser here after sign-in. The endpoint validates
+        the OpenID assertion and a signed state (carrying the user), links the
+        account, then 302-redirects to the web app at `/account?steam=<result>`
+        where result is one of linked, denied, expired, conflict, error.
+      security: []
+      parameters:
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the web app account page
+
   /presence:
     get:
       tags: [presence]
@@ -492,7 +560,7 @@ components:
 
     Profile:
       type: object
-      required: [user, presence, total_seconds, game_stats]
+      required: [user, presence, total_seconds, game_stats, connections]
       properties:
         user:
           $ref: '#/components/schemas/User'
@@ -505,6 +573,33 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GameStat'
+        connections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Connection'
+
+    Connection:
+      type: object
+      description: A linked external platform account
+      required: [provider, provider_user_id, linked_at]
+      properties:
+        provider:
+          type: string
+          enum: [steam, battlenet, riot, epic, xbox, psn]
+        provider_user_id:
+          type: string
+          description: The user's id on that platform (e.g. SteamID64)
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        profile_url:
+          type: string
+          format: uri
+        linked_at:
+          type: string
+          format: date-time
 
     GameStat:
       type: object
