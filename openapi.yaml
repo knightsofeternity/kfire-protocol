@@ -65,7 +65,9 @@ paths:
                   maxLength: 128
                 invite_code:
                   type: string
-                  description: Required when open registration is disabled
+                  description: |
+                    Required when open registration is disabled (invite-only).
+                    Consumed on success; its role is granted to the new account.
       responses:
         '201':
           description: Account created
@@ -263,6 +265,164 @@ paths:
                       $ref: '#/components/schemas/GameDetail'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /config:
+    get:
+      tags: [users]
+      operationId: getConfig
+      summary: Public instance configuration
+      description: Lets the web client tailor the sign-up UI.
+      security: []
+      responses:
+        '200':
+          description: Instance config
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [open_registration, org_name]
+                properties:
+                  open_registration:
+                    type: boolean
+                  org_name:
+                    type: string
+
+  /admin/members:
+    get:
+      tags: [admin]
+      operationId: listMembers
+      summary: List all members
+      responses:
+        '200':
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Member'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/members/{id}:
+    patch:
+      tags: [admin]
+      operationId: updateMember
+      summary: Change a member's role or ban state
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [admin, member]
+                banned:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Refused (last admin, or banning yourself)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/invites:
+    get:
+      tags: [admin]
+      operationId: listInvites
+      summary: List pending invites
+      responses:
+        '200':
+          description: Pending invites
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invites]
+                properties:
+                  invites:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invite'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [admin]
+      operationId: createInvite
+      summary: Create a shareable invite link
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: Free-text reminder for the admin
+                role:
+                  type: string
+                  enum: [admin, member]
+                  default: member
+      responses:
+        '201':
+          description: Invite created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/invites/{code}:
+    delete:
+      tags: [admin]
+      operationId: revokeInvite
+      summary: Revoke a pending invite
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Invite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /admin/games/sync:
     post:
@@ -505,6 +665,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Authenticated but not allowed (e.g. admin role required)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     ValidationError:
       description: Request body failed validation
       content:
@@ -675,6 +841,52 @@ components:
         session_count:
           type: integer
         last_played_at:
+          type: string
+          format: date-time
+
+    Member:
+      type: object
+      required: [id, username, email, role, banned, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, member]
+        banned:
+          type: boolean
+        avatar_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+
+    Invite:
+      type: object
+      required: [code, role, url, created_at, expires_at]
+      properties:
+        code:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+        url:
+          type: string
+          format: uri
+          description: Shareable link (PublicURL + /?invite=code)
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
           type: string
           format: date-time
 
