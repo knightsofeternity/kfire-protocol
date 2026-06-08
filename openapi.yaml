@@ -172,16 +172,70 @@ paths:
     get:
       tags: [users]
       operationId: getCurrentUser
-      summary: Get the authenticated user's profile
+      summary: Get the authenticated user's account
       responses:
         '200':
-          description: Current user
+          description: Current user (includes private fields)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [users]
+      operationId: updateCurrentUser
+      summary: Update the authenticated user's account settings
+      description: |
+        Currently the activity privacy toggle. Disabling it hides the user's
+        current game from other members in live presence (the user and admins
+        still see it); the user's own session history is unaffected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                activity_visible:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/{id}:
+    get:
+      tags: [users]
+      operationId: getUserProfile
+      summary: Public player profile with playtime stats
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Player profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /games:
     get:
@@ -420,14 +474,49 @@ components:
         email:
           type: string
           format: email
-          description: Only present on the owner's own profile
+          description: Only present on the owner's own account
         role:
           type: string
           enum: [admin, member]
         avatar_url:
           type: string
           format: uri
+        activity_visible:
+          type: boolean
+          description: |
+            Presence privacy toggle. Only present on the owner's own account.
+            When false, other members never see the user's current game.
         created_at:
+          type: string
+          format: date-time
+
+    Profile:
+      type: object
+      required: [user, presence, total_seconds, game_stats]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        presence:
+          $ref: '#/components/schemas/PresenceEntry'
+        total_seconds:
+          type: integer
+          description: Total tracked playtime across all games
+        game_stats:
+          type: array
+          items:
+            $ref: '#/components/schemas/GameStat'
+
+    GameStat:
+      type: object
+      required: [game, total_seconds, session_count, last_played_at]
+      properties:
+        game:
+          $ref: '#/components/schemas/Game'
+        total_seconds:
+          type: integer
+        session_count:
+          type: integer
+        last_played_at:
           type: string
           format: date-time
 
@@ -478,6 +567,9 @@ components:
           format: uuid
         username:
           type: string
+        avatar_url:
+          type: string
+          format: uri
         status:
           $ref: '#/components/schemas/PresenceStatus'
         game:
