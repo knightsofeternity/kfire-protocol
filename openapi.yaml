@@ -346,6 +346,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /connect/steam/sync:
+    post:
+      tags: [connectors]
+      operationId: syncSteam
+      summary: Import the caller's Steam library and achievements now
+      description: |
+        Pulls owned-game playtime (merged into the profile's per-game stats) and
+        unlocked achievements for the most-played games. Also runs periodically
+        in the background for every linked account.
+      responses:
+        '200':
+          description: Import summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [games_imported, achievements_imported]
+                properties:
+                  games_imported:
+                    type: integer
+                  achievements_imported:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No Steam account linked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          description: Steam connector not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /connect/steam/callback:
     get:
       tags: [connectors]
@@ -560,7 +597,7 @@ components:
 
     Profile:
       type: object
-      required: [user, presence, total_seconds, game_stats, connections]
+      required: [user, presence, total_seconds, game_stats, connections, achievement_count, recent_achievements]
       properties:
         user:
           $ref: '#/components/schemas/User'
@@ -568,7 +605,9 @@ components:
           $ref: '#/components/schemas/PresenceEntry'
         total_seconds:
           type: integer
-          description: Total tracked playtime across all games
+          description: |
+            Total playtime across all games, merging local client sessions and
+            imported platform playtime (Steam).
         game_stats:
           type: array
           items:
@@ -577,6 +616,30 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Connection'
+        achievement_count:
+          type: integer
+        recent_achievements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Achievement'
+
+    Achievement:
+      type: object
+      required: [game, api_name, unlocked_at]
+      properties:
+        game:
+          $ref: '#/components/schemas/Game'
+        api_name:
+          type: string
+          description: Platform achievement identifier
+        display_name:
+          type: string
+        icon_url:
+          type: string
+          format: uri
+        unlocked_at:
+          type: string
+          format: date-time
 
     Connection:
       type: object
