@@ -633,6 +633,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /connect/battlenet:
+    get:
+      tags: [connectors]
+      operationId: startBattlenetLink
+      summary: Begin linking a Battle.net account (OAuth2)
+      description: |
+        Returns the Battle.net authorization URL. The web client navigates the
+        browser to it; Battle.net redirects to the callback. The user's OAuth
+        tokens are encrypted at rest (AES-256-GCM). Returns 501 when the
+        connector is not configured.
+      responses:
+        '200':
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '501':
+          description: Battle.net connector not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [connectors]
+      operationId: unlinkBattlenet
+      summary: Unlink the Battle.net account
+      responses:
+        '204':
+          description: Unlinked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No Battle.net account linked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /connect/battlenet/callback:
+    get:
+      tags: [connectors]
+      operationId: battlenetCallback
+      summary: Battle.net OAuth2 redirect endpoint (browser)
+      description: |
+        Battle.net redirects the browser here. The endpoint validates the signed
+        state, exchanges the code for tokens, stores the BattleTag and the
+        encrypted tokens, then 302-redirects to `/account?battlenet=<result>`.
+      security: []
+      parameters:
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: code
+          in: query
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect to the web app account page
+
   /connect/steam/sync:
     post:
       tags: [connectors]
