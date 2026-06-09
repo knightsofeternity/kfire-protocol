@@ -1,4 +1,4 @@
-# KFIRE WebSocket Protocol — Presence Events
+# KFIRE WebSocket Protocol - Presence Events
 
 Real-time presence is delivered over a single WebSocket endpoint:
 
@@ -12,7 +12,7 @@ as well as the admin web UI (browser consumer).
 
 ## Envelope
 
-Every message — in both directions — is a JSON object with this envelope:
+Every message - in both directions - is a JSON object with this envelope:
 
 ```json
 {
@@ -32,14 +32,14 @@ Unknown `type` values MUST be ignored by receivers (forward compatibility).
 
 ## Connection lifecycle
 
-1. Client opens the WebSocket (no token in the URL — tokens in URLs leak into logs).
+1. Client opens the WebSocket (no token in the URL - tokens in URLs leak into logs).
 2. Client MUST send `hello` as its **first** message, within **10 seconds**.
 3. Server replies `hello_ack` (or `error` + close on failure).
 4. Client sends presence events as they happen, plus periodic `heartbeat`.
 5. Server broadcasts `presence_update` to all authenticated connections of the org.
 
 The access token is a 15-minute JWT. When it expires mid-connection the server
-keeps the connection open — the connection was authenticated at `hello` time.
+keeps the connection open - the connection was authenticated at `hello` time.
 On reconnect the client MUST present a fresh token (refresh via REST first).
 
 ### Heartbeat & liveness
@@ -52,7 +52,7 @@ On reconnect the client MUST present a fresh token (refresh via REST first).
 
 Clients MUST reconnect with exponential backoff + jitter:
 `min(2^attempt × 1s + rand(0–1s), 60s)`. After reconnecting, the client MUST
-re-send `game_started` for any game still running locally — the server
+re-send `game_started` for any game still running locally - the server
 deduplicates against open sessions (same user + game ⇒ no new session).
 
 ---

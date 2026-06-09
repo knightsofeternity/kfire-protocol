@@ -2,10 +2,10 @@ openapi: 3.1.0
 info:
   title: KFIRE Server API
   description: |
-    REST control plane for KFIRE — self-hosted gaming presence for organizations.
+    REST control plane for KFIRE - self-hosted gaming presence for organizations.
 
     Authentication uses short-lived JWT access tokens (15 min) plus device-bound
-    refresh tokens. Real-time presence is delivered over WebSocket — see
+    refresh tokens. Real-time presence is delivered over WebSocket - see
     `websocket-events.md` in this repository.
   version: 0.1.0
   license:
@@ -578,7 +578,7 @@ paths:
           schema: { type: string }
       responses:
         '204':
-          description: Approved — the client's next poll returns tokens
+          description: Approved - the client's next poll returns tokens
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -819,7 +819,7 @@ paths:
       summary: Snapshot of members currently online / in game
       description: |
         Returns the current presence state for every member. For live updates,
-        subscribe to the WebSocket instead — this endpoint is intended for
+        subscribe to the WebSocket instead - this endpoint is intended for
         initial page load and non-realtime consumers.
       responses:
         '200':
@@ -926,7 +926,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     RateLimited:
-      description: Too many requests — retry after the indicated delay
+      description: Too many requests - retry after the indicated delay
       headers:
         Retry-After:
           schema:

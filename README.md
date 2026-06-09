@@ -5,7 +5,7 @@
 <h1 align="center">kfire-protocol</h1>
 
 <p align="center">
-  The shared API & WebSocket contract for KFIRE — the source of truth between client and server.
+  The shared API & WebSocket contract for KFIRE - the source of truth between client and server.
 </p>
 
 <p align="center">
@@ -25,8 +25,8 @@ Xfire. This repository is the **single source of truth** for the client/server c
 
 ## Related repositories
 
-- [kfire-server](https://github.com/knightsofeternity/kfire-server) — backend + admin web UI (AGPL-3.0)
-- [kfire-client](https://github.com/knightsofeternity/kfire-client) — desktop tray client (MIT)
+- [kfire-server](https://github.com/knightsofeternity/kfire-server) - backend + admin web UI (AGPL-3.0)
+- [kfire-client](https://github.com/knightsofeternity/kfire-client) - desktop tray client (MIT)
 
 ## Using the schemas
 
