@@ -34,6 +34,8 @@ tags:
     description: Instance administration (admin role required)
   - name: connectors
     description: External platform account linking (Steam, …)
+  - name: devices
+    description: Browser-based desktop client linking (OAuth device grant)
 
 paths:
   /auth/register:
@@ -456,6 +458,131 @@ paths:
                 $ref: '#/components/schemas/Error'
         '502':
           description: Discord catalog unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /devices/pair/start:
+    post:
+      tags: [devices]
+      operationId: pairStart
+      summary: Begin linking a desktop client
+      description: |
+        The client starts pairing. It receives a secret device_code and a short
+        user_code; it opens verification_url in the browser for the user to
+        approve, then polls.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id, platform]
+              properties:
+                device_id:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                platform:
+                  type: string
+                  enum: [windows, macos, linux]
+      responses:
+        '200':
+          description: Pairing started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device_code, user_code, verification_url, expires_in, interval]
+                properties:
+                  device_code: { type: string }
+                  user_code: { type: string }
+                  verification_url: { type: string, format: uri }
+                  expires_in: { type: integer }
+                  interval: { type: integer }
+
+  /devices/pair/poll:
+    post:
+      tags: [devices]
+      operationId: pairPoll
+      summary: Poll a pairing until approved
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_code]
+              properties:
+                device_code: { type: string }
+      responses:
+        '200':
+          description: |
+            status is one of: pending, complete (with tokens), denied, expired.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, complete, denied, expired]
+                  access_token: { type: string }
+                  refresh_token: { type: string }
+                  expires_in: { type: integer }
+
+  /devices/pair/{code}:
+    get:
+      tags: [devices]
+      operationId: pairInfo
+      summary: Device info for the approval page
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Device awaiting approval
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [device_name, platform]
+                properties:
+                  device_name: { type: string }
+                  platform: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Invalid or expired code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /devices/pair/{code}/approve:
+    post:
+      tags: [devices]
+      operationId: pairApprove
+      summary: Approve a device link (authenticated user)
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Approved — the client's next poll returns tokens
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Invalid or expired code
           content:
             application/json:
               schema:
