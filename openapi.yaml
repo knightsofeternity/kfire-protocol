@@ -564,6 +564,60 @@ paths:
         '302':
           description: Redirect to the web app account page
 
+  /games/{slug}:
+    get:
+      tags: [games]
+      operationId: getGame
+      summary: Game detail with the org leaderboard
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Game detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [game, total_seconds, player_count, leaderboard]
+                properties:
+                  game:
+                    $ref: '#/components/schemas/Game'
+                  total_seconds:
+                    type: integer
+                    description: Total playtime across the org for this game
+                  player_count:
+                    type: integer
+                  leaderboard:
+                    type: array
+                    items:
+                      type: object
+                      required: [user_id, username, total_seconds, session_count]
+                      properties:
+                        user_id:
+                          type: string
+                          format: uuid
+                        username:
+                          type: string
+                        avatar_url:
+                          type: string
+                          format: uri
+                        total_seconds:
+                          type: integer
+                        session_count:
+                          type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Game not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /presence:
     get:
       tags: [presence]
@@ -906,6 +960,13 @@ components:
         icon_url:
           type: string
           format: uri
+          description: |
+            Served by the server's lazy image cache (/img/games/{id}/icon),
+            which fetches and stores the Discord CDN image on first request.
+        cover_url:
+          type: string
+          format: uri
+          description: Cover art via the image cache (/img/games/{id}/cover)
 
     GameDetail:
       description: Catalog entry with the data needed for local process matching
